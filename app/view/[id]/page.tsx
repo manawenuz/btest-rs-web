@@ -75,6 +75,8 @@ export default function ViewResultPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,17 +85,11 @@ export default function ViewResultPage() {
       try {
         setLoading(true);
         const res = await fetch(`/api/results/${id}`);
-        if (!res.ok) {
-          if (res.status === 401) {
-            router.push("/");
-            return;
-          }
-          if (res.status === 404) {
-            setError("Test run not found.");
-            return;
-          }
-          throw new Error("Failed to fetch result");
+        if (res.status === 404) {
+          setError("Test run not found.");
+          return;
         }
+        if (!res.ok) throw new Error("Failed to fetch result");
         const data = (await res.json()) as RunDetail;
         if (!cancelled) setRun(data);
       } catch {
@@ -103,11 +99,24 @@ export default function ViewResultPage() {
       }
     }
 
+    // Check if user is logged in (to show owner actions)
+    async function checkOwner() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          setIsOwner(true);
+        }
+      } catch {
+        // Not logged in — that's fine
+      }
+    }
+
     fetchRun();
+    checkOwner();
     return () => {
       cancelled = true;
     };
-  }, [id, router]);
+  }, [id]);
 
   async function handleDownloadCsv() {
     try {
@@ -146,6 +155,14 @@ export default function ViewResultPage() {
     }
   }
 
+  function handleShare() {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -176,11 +193,11 @@ export default function ViewResultPage() {
           {error}
         </div>
         <a
-          href="/dashboard"
+          href="/"
           className="text-sm font-medium underline"
           style={{ color: "#42A5F5" }}
         >
-          Back to Dashboard
+          Go Home
         </a>
       </div>
     );
@@ -188,7 +205,6 @@ export default function ViewResultPage() {
 
   if (!run) return null;
 
-  // Compute aggregate stats from intervals
   const totalLost = run.intervals.reduce(
     (sum, i) => sum + (i.lost ?? 0),
     0
@@ -209,9 +225,9 @@ export default function ViewResultPage() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#121212" }}>
       <main className="mx-auto max-w-7xl px-6 py-8">
-        {/* Back button */}
+        {/* Back link */}
         <a
-          href="/dashboard"
+          href={isOwner ? "/dashboard" : "/"}
           className="mb-6 inline-flex items-center gap-2 text-sm font-medium transition-colors"
           style={{ color: "#42A5F5" }}
           onMouseEnter={(e) => {
@@ -224,7 +240,7 @@ export default function ViewResultPage() {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M10.5 13L5.5 8L10.5 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Dashboard
+          {isOwner ? "Dashboard" : "Home"}
         </a>
 
         {/* Header */}
@@ -324,33 +340,49 @@ export default function ViewResultPage() {
           className="flex flex-wrap gap-3 rounded-lg border p-6"
           style={{ backgroundColor: "#1E1E1E", borderColor: "#333333" }}
         >
+          {/* Share — always visible */}
           <button
             type="button"
-            onClick={handleDownloadCsv}
+            onClick={handleShare}
             className="rounded-lg px-4 py-2 text-sm font-medium transition-opacity"
-            style={{ backgroundColor: "#42A5F5", color: "#FFFFFF" }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.opacity = "0.85";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.opacity = "1";
-            }}
-          >
-            Download CSV
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-lg border px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
             style={{
-              borderColor: "#EF5350",
-              color: "#EF5350",
-              backgroundColor: "transparent",
+              backgroundColor: copied ? "#66BB6A" : "#42A5F5",
+              color: "#FFFFFF",
             }}
           >
-            {deleting ? "Deleting..." : "Delete Run"}
+            {copied ? "Link Copied!" : "Share Link"}
           </button>
+
+          {/* Owner-only actions */}
+          {isOwner && (
+            <>
+              <button
+                type="button"
+                onClick={handleDownloadCsv}
+                className="rounded-lg border px-4 py-2 text-sm font-medium transition-opacity"
+                style={{
+                  borderColor: "#42A5F5",
+                  color: "#42A5F5",
+                  backgroundColor: "transparent",
+                }}
+              >
+                Download CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-lg border px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+                style={{
+                  borderColor: "#EF5350",
+                  color: "#EF5350",
+                  backgroundColor: "transparent",
+                }}
+              >
+                {deleting ? "Deleting..." : "Delete Run"}
+              </button>
+            </>
+          )}
         </div>
       </main>
     </div>

@@ -7,23 +7,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await authenticateRequest(request);
-    if (!auth) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
     const { id } = await params;
     const sql = getDb();
 
+    // Public endpoint — anyone with the link can view a result
     const [run] = await sql`
       SELECT id, user_id, timestamp, server, protocol, direction, duration_sec,
              tx_avg_mbps, rx_avg_mbps, tx_bytes, rx_bytes, lost,
              public_ip, lan_ip, ssid, device_id, created_at
       FROM test_runs
-      WHERE id = ${id} AND user_id = ${auth.userId}
+      WHERE id = ${id}
       LIMIT 1
     `;
 

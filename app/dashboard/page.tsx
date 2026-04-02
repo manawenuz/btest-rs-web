@@ -34,6 +34,7 @@ interface Run {
 interface FilterValues {
   server?: string;
   protocol?: string;
+  device?: string;
   from?: string;
   to?: string;
 }
@@ -61,9 +62,12 @@ export default function DashboardPage() {
   const [apiKeyCopied, setApiKeyCopied] = useState(false);
   const [regeneratingKey, setRegeneratingKey] = useState(false);
 
-  // Derive unique servers from all loaded runs
+  // Derive unique servers and devices from all loaded runs
   const servers = results
     ? Array.from(new Set(results.runs.map((r) => r.server))).sort()
+    : [];
+  const devices = results
+    ? Array.from(new Set(results.runs.map((r) => r.device_id).filter((d): d is string => !!d))).sort()
     : [];
 
   const fetchResults = useCallback(
@@ -73,6 +77,7 @@ export default function DashboardPage() {
       params.set("limit", String(PAGE_LIMIT));
       if (currentFilters.server) params.set("server", currentFilters.server);
       if (currentFilters.protocol) params.set("protocol", currentFilters.protocol);
+      if (currentFilters.device) params.set("device", currentFilters.device);
       if (currentFilters.from) params.set("from", currentFilters.from);
       if (currentFilters.to) params.set("to", currentFilters.to);
 
@@ -394,7 +399,7 @@ export default function DashboardPage() {
 
         {/* Filters */}
         <div className="mb-6">
-          <Filters servers={servers} onFilterChange={handleFilterChange} />
+          <Filters servers={servers} devices={devices} onFilterChange={handleFilterChange} />
         </div>
 
         {/* Action buttons */}

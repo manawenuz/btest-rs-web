@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10)));
     const server = searchParams.get('server');
     const protocol = searchParams.get('protocol');
+    const device = searchParams.get('device');
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const offset = (page - 1) * limit;
@@ -83,6 +84,10 @@ export async function GET(request: NextRequest) {
     if (protocol) {
       conditions.push(`protocol = $${paramIdx++}`);
       values.push(protocol);
+    }
+    if (device) {
+      conditions.push(`device_id = $${paramIdx++}`);
+      values.push(device);
     }
     if (from) {
       conditions.push(`timestamp >= $${paramIdx++}`);

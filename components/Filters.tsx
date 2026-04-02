@@ -5,12 +5,14 @@ import { useState, useCallback } from "react";
 interface FilterValues {
   server?: string;
   protocol?: string;
+  device?: string;
   from?: string;
   to?: string;
 }
 
 interface FiltersProps {
   servers: string[];
+  devices: string[];
   onFilterChange: (filters: FilterValues) => void;
 }
 
@@ -24,17 +26,19 @@ const INPUT_STYLE: React.CSSProperties = {
   color: "#FFFFFF",
 };
 
-export default function Filters({ servers, onFilterChange }: FiltersProps) {
+export default function Filters({ servers, devices, onFilterChange }: FiltersProps) {
   const [server, setServer] = useState<string>("");
   const [protocol, setProtocol] = useState<Protocol>("ALL");
+  const [device, setDevice] = useState<string>("");
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
 
   const emitChange = useCallback(
-    (updates: Partial<{ server: string; protocol: Protocol; from: string; to: string }>) => {
+    (updates: Partial<{ server: string; protocol: Protocol; device: string; from: string; to: string }>) => {
       const next = {
         server: updates.server ?? server,
         protocol: updates.protocol ?? protocol,
+        device: updates.device ?? device,
         from: updates.from ?? from,
         to: updates.to ?? to,
       };
@@ -42,12 +46,13 @@ export default function Filters({ servers, onFilterChange }: FiltersProps) {
       const filters: FilterValues = {};
       if (next.server) filters.server = next.server;
       if (next.protocol !== "ALL") filters.protocol = next.protocol;
+      if (next.device) filters.device = next.device;
       if (next.from) filters.from = next.from;
       if (next.to) filters.to = next.to;
 
       onFilterChange(filters);
     },
-    [server, protocol, from, to, onFilterChange]
+    [server, protocol, device, from, to, onFilterChange]
   );
 
   function handleServerChange(value: string) {
@@ -58,6 +63,11 @@ export default function Filters({ servers, onFilterChange }: FiltersProps) {
   function handleProtocolChange(value: Protocol) {
     setProtocol(value);
     emitChange({ protocol: value });
+  }
+
+  function handleDeviceChange(value: string) {
+    setDevice(value);
+    emitChange({ device: value });
   }
 
   function handleFromChange(value: string) {
@@ -96,6 +106,33 @@ export default function Filters({ servers, onFilterChange }: FiltersProps) {
           ))}
         </select>
       </div>
+
+      {/* Device filter */}
+      {devices.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="filter-device"
+            className="text-xs font-medium"
+            style={{ color: "#9E9E9E" }}
+          >
+            Device
+          </label>
+          <select
+            id="filter-device"
+            value={device}
+            onChange={(e) => handleDeviceChange(e.target.value)}
+            className="rounded-lg border px-3 py-2 text-sm outline-none transition-colors focus:border-blue-500"
+            style={INPUT_STYLE}
+          >
+            <option value="">All devices</option>
+            {devices.map((d) => (
+              <option key={d} value={d}>
+                {d.length > 16 ? `${d.slice(0, 8)}...${d.slice(-4)}` : d}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Protocol toggle */}
       <div className="flex flex-col gap-1.5">
