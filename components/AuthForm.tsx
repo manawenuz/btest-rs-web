@@ -33,8 +33,9 @@ export default function AuthForm() {
       });
 
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as AuthError | null;
+        const body = await res.json().catch(() => null);
         const msg =
+          body?.error ??
           body?.message ??
           (res.status === 401
             ? "Invalid email or password."

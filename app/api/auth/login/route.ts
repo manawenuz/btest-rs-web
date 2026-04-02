@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
 import { verifyPassword, createToken } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
@@ -58,16 +57,15 @@ export async function POST(request: NextRequest) {
 
     const token = await createToken(user.id);
 
-    const cookieStore = await cookies();
-    cookieStore.set('token', token, {
+    const response = NextResponse.json({ token, api_key: user.api_key });
+    response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: 7 * 24 * 60 * 60,
     });
-
-    return NextResponse.json({ token, api_key: user.api_key });
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(
