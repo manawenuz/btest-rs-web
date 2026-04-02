@@ -61,6 +61,17 @@ export async function migrate() {
 
   await sql`CREATE INDEX IF NOT EXISTS idx_test_intervals_run ON test_intervals(run_id, interval_sec)`;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash    TEXT NOT NULL,
+      expires_at    TIMESTAMPTZ NOT NULL,
+      used          BOOLEAN DEFAULT FALSE,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+
   // Migrations for existing databases
   await sql`ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS device_id TEXT`;
 }
