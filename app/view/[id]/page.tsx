@@ -31,6 +31,7 @@ interface RunDetail {
   public_ip: string | null;
   lan_ip: string | null;
   ssid: string | null;
+  device_id: string | null;
   created_at: string;
   intervals: Interval[];
 }
@@ -202,6 +203,7 @@ export default function ViewResultPage() {
     { label: "Public IP", value: run.public_ip ?? "-" },
     { label: "LAN IP", value: run.lan_ip ?? "-" },
     { label: "SSID", value: run.ssid ?? "-" },
+    { label: "Device", value: run.device_id ?? "-" },
   ];
 
   return (

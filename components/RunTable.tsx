@@ -14,6 +14,7 @@ interface Run {
   lost: number;
   public_ip: string | null;
   ssid: string | null;
+  device_id: string | null;
 }
 
 interface RunTableProps {
@@ -38,6 +39,7 @@ const COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "lost", label: "Lost", align: "right" },
   { key: "public_ip", label: "IP" },
   { key: "ssid", label: "SSID" },
+  { key: "device_id", label: "Device" },
 ];
 
 function formatDate(ts: string): string {
@@ -78,6 +80,7 @@ function formatCell(key: SortKey, value: unknown): string {
       return (value as number).toLocaleString();
     case "public_ip":
     case "ssid":
+    case "device_id":
       return (value as string | null) ?? "-";
     default:
       return String(value ?? "-");

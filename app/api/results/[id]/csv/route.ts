@@ -23,7 +23,7 @@ export async function GET(
     const [run] = await sql`
       SELECT id, timestamp, server, protocol, direction, duration_sec,
              tx_avg_mbps, rx_avg_mbps, tx_bytes, rx_bytes, lost,
-             public_ip, lan_ip, ssid, created_at
+             public_ip, lan_ip, ssid, device_id, created_at
       FROM test_runs
       WHERE id = ${id} AND user_id = ${auth.userId}
       LIMIT 1

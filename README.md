@@ -173,6 +173,7 @@ Content-Encoding: gzip  (recommended)
   "public_ip": "203.0.113.50",
   "lan_ip": "192.168.1.42",
   "ssid": "MyWiFi-5G",
+  "device_id": "a1b2c3d4e5f6a7b8",
   "intervals": [
     {
       "sec": 1, "dir": "TX", "speed_mbps": 280.50,
@@ -228,33 +229,251 @@ Authorization: Bearer <JWT or API key>
 → text/csv download
 ```
 
+---
+
+## Client Integration Guide
+
+This section covers how **btest-rs-android** and **btest-rs** (CLI) should submit results to the web dashboard.
+
+### Configuration
+
+The client needs three settings (stored in SharedPreferences on Android, config file on CLI):
+
+| Setting | Example | Description |
+|---|---|---|
+| **Renderer URL** | `https://your-app.vercel.app` | Your btest-rs-web instance URL |
+| **API Key** | `btk_a1b2c3d4e5f6...` | Copied from the web dashboard |
+| **Auto-submit** | `true` | Whether to POST results after each test |
+
+### Device ID
+
+Each client must include a stable `device_id` that uniquely identifies the device. This enables per-device tracking on the dashboard without extra registration.
+
+| Platform | How to Get | Persistence |
+|---|---|---|
+| **Android** | `Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)` | Survives reboots, reset on factory reset |
+| **Linux** | Read `/etc/machine-id` | Stable across reboots, generated at OS install |
+| **macOS** | `ioreg -rd1 -c IOPlatformExpertDevice \| awk '/IOPlatformUUID/'` | Hardware-bound, never changes |
+| **Windows** | `reg query "HKLM\SOFTWARE\Microsoft\Cryptography" /v MachineGuid` | Stable across reboots |
+| **BSD** | `sysctl -n kern.hostuuid` | Stable across reboots |
+
+**Android (Kotlin):**
+```kotlin
+val deviceId = Settings.Secure.getString(
+    context.contentResolver,
+    Settings.Secure.ANDROID_ID
+)
+```
+
+**Linux/BSD (Rust):**
+```rust
+let device_id = std::fs::read_to_string("/etc/machine-id")
+    .unwrap_or_default()
+    .trim()
+    .to_string();
+```
+
+### Collecting Network Info
+
+Before submitting, the client should collect:
+
+```kotlin
+// Public IP (simple HTTP call)
+val publicIp = URL("https://ifconfig.co/ip").readText().trim()
+
+// LAN IP
+val lanIp = NetworkInterface.getNetworkInterfaces().toList()
+    .flatMap { it.inetAddresses.toList() }
+    .firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
+    ?.hostAddress
+
+// WiFi SSID (requires ACCESS_FINE_LOCATION on Android 8+, make optional)
+val wifiManager = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+val ssid = wifiManager.connectionInfo.ssid?.removeSurrounding("\"")
+```
+
+### Submission Payload
+
+**Full JSON structure** that the client must send:
+
+```json
+{
+  "timestamp": "2026-04-02T10:00:00Z",
+  "server": "104.225.217.60",
+  "protocol": "TCP",
+  "direction": "both",
+  "duration_sec": 30,
+  "tx_avg_mbps": 285.47,
+  "rx_avg_mbps": 272.83,
+  "tx_bytes": 2137030656,
+  "rx_bytes": 2046260728,
+  "lost": 0,
+  "public_ip": "203.0.113.50",
+  "lan_ip": "192.168.1.42",
+  "ssid": "MyWiFi-5G",
+  "device_id": "a1b2c3d4e5f6a7b8",
+  "intervals": [
+    {
+      "sec": 1,
+      "dir": "TX",
+      "speed_mbps": 280.50,
+      "bytes": 35062500,
+      "local_cpu": 15,
+      "remote_cpu": 60,
+      "lost": null
+    },
+    {
+      "sec": 1,
+      "dir": "RX",
+      "speed_mbps": 270.30,
+      "bytes": 33787500,
+      "local_cpu": 15,
+      "remote_cpu": 60,
+      "lost": 0
+    }
+  ]
+}
+```
+
+**Field reference:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `timestamp` | ISO 8601 string | Yes | When the test ran (client time) |
+| `server` | string | Yes | Test server address (IP or hostname) |
+| `protocol` | string | Yes | `"TCP"` or `"UDP"` |
+| `direction` | string | Yes | `"send"`, `"receive"`, or `"both"` |
+| `duration_sec` | integer | Yes | Test duration in seconds |
+| `tx_avg_mbps` | float | Yes | Average upload speed in Mbps |
+| `rx_avg_mbps` | float | Yes | Average download speed in Mbps |
+| `tx_bytes` | integer | Yes | Total bytes sent |
+| `rx_bytes` | integer | Yes | Total bytes received |
+| `lost` | integer | No | Packets lost (default 0) |
+| `public_ip` | string | No | Client's public IP |
+| `lan_ip` | string | No | Client's LAN IP |
+| `ssid` | string | No | WiFi network name |
+| `device_id` | string | No | Stable device identifier (see table above) |
+| `intervals` | array | Yes | Per-second measurement samples |
+
+**Interval fields:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `sec` | integer | Yes | Second number (1-based) |
+| `dir` | string | Yes | `"TX"` or `"RX"` |
+| `speed_mbps` | float | Yes | Speed during this second |
+| `bytes` | integer | Yes | Bytes transferred during this second |
+| `local_cpu` | integer | No | Local CPU usage % |
+| `remote_cpu` | integer | No | Remote CPU usage % |
+| `lost` | integer | No | Packets lost during this second |
+
+### Submitting (Android/Kotlin)
+
+```kotlin
+fun submitResult(rendererUrl: String, apiKey: String, json: String) {
+    val url = URL("$rendererUrl/api/results")
+
+    // Gzip compress the JSON
+    val compressed = ByteArrayOutputStream().use { baos ->
+        GZIPOutputStream(baos).use { gz ->
+            gz.write(json.toByteArray(Charsets.UTF_8))
+        }
+        baos.toByteArray()
+    }
+
+    val conn = url.openConnection() as HttpURLConnection
+    conn.requestMethod = "POST"
+    conn.doOutput = true
+    conn.setRequestProperty("Authorization", "Bearer $apiKey")
+    conn.setRequestProperty("Content-Type", "application/json")
+    conn.setRequestProperty("Content-Encoding", "gzip")
+    conn.connectTimeout = 10_000
+    conn.readTimeout = 10_000
+
+    conn.outputStream.use { it.write(compressed) }
+
+    val responseCode = conn.responseCode
+    if (responseCode == 201) {
+        val body = conn.inputStream.bufferedReader().readText()
+        // body = {"id": "uuid-...", "url": "/view/uuid-..."}
+        // Store the server-side ID in your local Room DB
+    } else {
+        val error = conn.errorStream?.bufferedReader()?.readText()
+        Log.e("BtestWeb", "Submit failed ($responseCode): $error")
+        // Queue for retry or log error
+    }
+}
+```
+
+### Submitting (Rust/CLI)
+
+```rust
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use std::io::Write;
+
+fn submit_result(renderer_url: &str, api_key: &str, json: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Gzip compress
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(json.as_bytes())?;
+    let compressed = encoder.finish()?;
+
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post(format!("{}/api/results", renderer_url))
+        .header("Authorization", format!("Bearer {}", api_key))
+        .header("Content-Type", "application/json")
+        .header("Content-Encoding", "gzip")
+        .body(compressed)
+        .send()?;
+
+    if resp.status() == 201 {
+        let body: serde_json::Value = resp.json()?;
+        println!("Submitted: {}", body["url"]);
+    } else {
+        eprintln!("Submit failed ({}): {}", resp.status(), resp.text()?);
+    }
+    Ok(())
+}
+```
+
+### Submission Flow
+
+```
+Test completes
+  → Save to local storage (Room DB on Android, SQLite on CLI)
+  → If auto-submit enabled AND renderer URL configured:
+      1. Collect: public_ip, lan_ip, ssid, device_id
+      2. Build JSON payload (see structure above)
+      3. Gzip compress (required for payloads > 1 KB)
+      4. POST to {renderer_url}/api/results
+         Headers: Authorization: Bearer btk_...
+                  Content-Type: application/json
+                  Content-Encoding: gzip
+      5. On 201: store server-side ID locally for linking
+      6. On failure: queue for retry (exponential backoff)
+```
+
+### Batch Submission
+
+For submitting multiple queued results at once:
+
+```
+POST {renderer_url}/api/results/batch
+Headers: same as above
+Body: { "runs": [ {...}, {...}, ... ] }
+Limits: max 100 runs per batch, 10 requests/min
+Response: { "ids": ["...", "..."], "count": 2 }
+```
+
 ### Rate Limits
 
 | Endpoint | Limit |
 |---|---|
 | `POST /api/results` | 60/min per API key |
-| `POST /api/results/batch` | 10/min per API key (max 100 runs) |
+| `POST /api/results/batch` | 10/min per API key, max 100 runs |
 | `GET` endpoints | 120/min per API key |
 | Auth endpoints | 10/min per IP |
-
----
-
-## Android App Integration
-
-Configure your btest-rs-android app with:
-
-| Setting | Value |
-|---|---|
-| **Renderer URL** | `https://your-app.vercel.app` |
-| **API Key** | Copy from the web dashboard |
-| **Auto-submit** | Enable to POST results after each test |
-
-The Android app will:
-1. Run a bandwidth test
-2. Save results locally
-3. Compress the result JSON with gzip
-4. POST to `{renderer_url}/api/results` with your API key
-5. On success, link the local result to the server-side ID
 
 ---
 

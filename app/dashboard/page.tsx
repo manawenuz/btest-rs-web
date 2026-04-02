@@ -28,6 +28,7 @@ interface Run {
   public_ip: string | null;
   lan_ip: string | null;
   ssid: string | null;
+  device_id: string | null;
 }
 
 interface FilterValues {

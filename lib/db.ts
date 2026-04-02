@@ -38,6 +38,7 @@ export async function migrate() {
       public_ip     TEXT,
       lan_ip        TEXT,
       ssid          TEXT,
+      device_id     TEXT,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `;
@@ -59,4 +60,7 @@ export async function migrate() {
   `;
 
   await sql`CREATE INDEX IF NOT EXISTS idx_test_intervals_run ON test_intervals(run_id, interval_sec)`;
+
+  // Migrations for existing databases
+  await sql`ALTER TABLE test_runs ADD COLUMN IF NOT EXISTS device_id TEXT`;
 }

@@ -25,7 +25,7 @@ export function generateCsvExport(
 
   lines.push('# SECTION: runs');
   lines.push(
-    'run_id,timestamp,server,protocol,direction,duration_sec,tx_avg_mbps,rx_avg_mbps,tx_bytes,rx_bytes,lost,public_ip,lan_ip,ssid'
+    'run_id,timestamp,server,protocol,direction,duration_sec,tx_avg_mbps,rx_avg_mbps,tx_bytes,rx_bytes,lost,public_ip,lan_ip,ssid,device_id'
   );
 
   for (const run of runs) {
@@ -45,6 +45,7 @@ export function generateCsvExport(
         escapeCsvField(run.public_ip),
         escapeCsvField(run.lan_ip),
         escapeCsvField(run.ssid),
+        escapeCsvField(run.device_id),
       ].join(',')
     );
   }

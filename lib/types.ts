@@ -22,6 +22,7 @@ export interface TestRun {
   public_ip: string | null;
   lan_ip: string | null;
   ssid: string | null;
+  device_id: string | null;
   created_at: string;
 }
 
@@ -52,6 +53,7 @@ export interface SubmitRunRequest {
   public_ip?: string | null;
   lan_ip?: string | null;
   ssid?: string | null;
+  device_id?: string | null;
   intervals: {
     sec: number;
     dir: string;

@@ -28,6 +28,7 @@ interface RunDetail {
   public_ip: string | null;
   lan_ip: string | null;
   ssid: string | null;
+  device_id: string | null;
   created_at: string;
   intervals: Interval[];
 }
@@ -503,6 +504,7 @@ function CompareContent() {
       color: (r) => (r.lost > 0 ? "#EF5350" : undefined),
     },
     { label: "SSID", getValue: (r) => r.ssid ?? "-" },
+    { label: "Device", getValue: (r) => r.device_id ?? "-" },
   ];
 
   return (

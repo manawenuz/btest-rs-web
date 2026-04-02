@@ -29,6 +29,7 @@ const submitRunSchema = z.object({
   public_ip: z.string().nullable().optional(),
   lan_ip: z.string().nullable().optional(),
   ssid: z.string().nullable().optional(),
+  device_id: z.string().nullable().optional(),
   intervals: z.array(intervalSchema),
 });
 
@@ -86,12 +87,13 @@ export async function POST(request: NextRequest) {
         INSERT INTO test_runs (
           user_id, timestamp, server, protocol, direction, duration_sec,
           tx_avg_mbps, rx_avg_mbps, tx_bytes, rx_bytes, lost,
-          public_ip, lan_ip, ssid
+          public_ip, lan_ip, ssid, device_id
         ) VALUES (
           ${auth.userId}, ${run.timestamp}, ${run.server}, ${run.protocol},
           ${run.direction}, ${run.duration_sec}, ${run.tx_avg_mbps},
           ${run.rx_avg_mbps}, ${run.tx_bytes}, ${run.rx_bytes}, ${run.lost},
-          ${run.public_ip ?? null}, ${run.lan_ip ?? null}, ${run.ssid ?? null}
+          ${run.public_ip ?? null}, ${run.lan_ip ?? null}, ${run.ssid ?? null},
+          ${run.device_id ?? null}
         )
         RETURNING id
       `;

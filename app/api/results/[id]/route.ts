@@ -21,7 +21,7 @@ export async function GET(
     const [run] = await sql`
       SELECT id, user_id, timestamp, server, protocol, direction, duration_sec,
              tx_avg_mbps, rx_avg_mbps, tx_bytes, rx_bytes, lost,
-             public_ip, lan_ip, ssid, created_at
+             public_ip, lan_ip, ssid, device_id, created_at
       FROM test_runs
       WHERE id = ${id} AND user_id = ${auth.userId}
       LIMIT 1
@@ -57,6 +57,7 @@ export async function GET(
       public_ip: run.public_ip,
       lan_ip: run.lan_ip,
       ssid: run.ssid,
+      device_id: run.device_id,
       created_at: run.created_at,
       intervals: intervals.map((i) => ({
         sec: i.interval_sec,
