@@ -1,0 +1,47 @@
+# btest-rs-web — Docker Compose (without reverse proxy)
+# Assumes you have your own reverse proxy (nginx, traefik, caddy, etc.)
+# pointing to http://localhost:3000
+#
+# Usage:
+#   cp .env.example .env
+#   # Edit .env with your values
+#   docker compose up -d
+#   # Run migration:
+#   curl http://localhost:3000/api/migrate
+
+services:
+  app:
+    build: .
+    container_name: btest-rs-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://btest:${POSTGRES_PASSWORD:-changeme}@db:5432/btest?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - MIGRATE_SECRET=${MIGRATE_SECRET:-}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: btest-rs-db
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=btest
+      - POSTGRES_USER=btest
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U btest -d btest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

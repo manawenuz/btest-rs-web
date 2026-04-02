@@ -1,12 +1,17 @@
 # btest-rs-web Deployment Guide
 
-This guide walks through deploying your own btest-rs-web instance from start to finish. The recommended path uses GitHub, Vercel, and Neon Postgres -- all have free tiers sufficient for personal or small team use.
+This guide walks through deploying your own btest-rs-web instance. Two deployment paths are available:
+
+| Path | Best For | Requirements |
+|---|---|---|
+| **Vercel** (recommended) | Quick setup, zero ops | GitHub + Vercel + Neon accounts (all free) |
+| **Docker** | Self-hosted, full control | Any Linux server with Docker |
 
 ---
 
-## Prerequisites
+## Option A: Vercel Deployment
 
-Before starting, you need accounts on:
+### Prerequisites
 
 - **GitHub** ([github.com](https://github.com)) -- to fork the repository
 - **Vercel** ([vercel.com](https://vercel.com)) -- to host the Next.js application
@@ -273,6 +278,162 @@ Check `/api/version` to confirm the new commit is deployed:
 ```bash
 curl https://your-app.vercel.app/api/version
 ```
+
+---
+
+## Option B: Docker Deployment
+
+Self-host btest-rs-web on any server with Docker. Two compose files are provided:
+
+| File | Use Case |
+|---|---|
+| `compose.yml` | You have your own reverse proxy (nginx, traefik, etc.) |
+| `compose.caddy.yml` | Includes Caddy as a reverse proxy with automatic HTTPS |
+
+### Prerequisites
+
+- A Linux server (VPS, dedicated, etc.) with Docker and Docker Compose installed
+- A domain name pointing to your server (for HTTPS)
+- Ports 80 and 443 open (for the Caddy variant)
+
+### Deploy with Your Own Reverse Proxy
+
+This runs the app on port 3000. Point your existing reverse proxy to it.
+
+```bash
+# Clone the repository
+git clone https://github.com/manawenuz/btest-rs-web.git
+cd btest-rs-web
+
+# Configure environment
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+POSTGRES_PASSWORD=a-strong-database-password
+JWT_SECRET=paste-output-of-openssl-rand-hex-32
+NEXT_PUBLIC_APP_URL=https://btest.example.com
+
+# Optional — password reset emails
+# RESEND_API_KEY=re_xxxxxxxxxxxx
+# EMAIL_FROM=btest-rs-web <noreply@yourdomain.com>
+```
+
+```bash
+# Start the stack
+docker compose up -d
+
+# Wait for containers to be healthy (~30 seconds)
+docker compose ps
+
+# Run database migration
+curl http://localhost:3000/api/migrate
+```
+
+The app is now running on `http://localhost:3000`. Configure your reverse proxy to forward traffic to it.
+
+### Deploy with Caddy (Automatic HTTPS)
+
+This includes Caddy as a reverse proxy that auto-provisions Let's Encrypt certificates.
+
+```bash
+git clone https://github.com/manawenuz/btest-rs-web.git
+cd btest-rs-web
+
+cp .env.example .env
+```
+
+Edit `.env`:
+
+```env
+DOMAIN=btest.example.com
+POSTGRES_PASSWORD=a-strong-database-password
+JWT_SECRET=paste-output-of-openssl-rand-hex-32
+
+# Optional — password reset emails
+# RESEND_API_KEY=re_xxxxxxxxxxxx
+# EMAIL_FROM=btest-rs-web <noreply@yourdomain.com>
+```
+
+```bash
+# Start the stack with the Caddy compose file
+docker compose -f compose.caddy.yml up -d
+
+# Wait for Caddy to provision the certificate (~30 seconds)
+# Run migration
+curl https://btest.example.com/api/migrate
+```
+
+Your instance is live at `https://btest.example.com` with automatic HTTPS.
+
+### Docker Architecture
+
+```mermaid
+graph TB
+    subgraph Server
+        subgraph "Docker Compose"
+            CA[Caddy<br/>Reverse Proxy<br/>Auto HTTPS]
+            APP[btest-rs-web<br/>Next.js App<br/>:3000]
+            DB[(PostgreSQL 16<br/>:5432)]
+        end
+    end
+
+    CL[Clients<br/>Android / CLI / Browser] -->|HTTPS :443| CA
+    CA -->|HTTP :3000| APP
+    APP -->|TCP :5432| DB
+
+    style CA fill:#1E1E1E,stroke:#42A5F5,color:#FFFFFF
+    style APP fill:#1E1E1E,stroke:#66BB6A,color:#FFFFFF
+    style DB fill:#1E1E1E,stroke:#FFA726,color:#FFFFFF
+```
+
+> In the `compose.yml` variant (without Caddy), replace the Caddy box with your own reverse proxy.
+
+### Managing the Docker Deployment
+
+```bash
+# View logs
+docker compose logs -f app
+docker compose logs -f db
+
+# Restart the app (after pulling updates)
+git pull
+docker compose up -d --build
+
+# Run migration after updates
+curl http://localhost:3000/api/migrate
+
+# Stop everything
+docker compose down
+
+# Stop and remove data (destructive!)
+docker compose down -v
+
+# Check database
+docker compose exec db psql -U btest -d btest -c "SELECT count(*) FROM test_runs;"
+```
+
+### Updating a Docker Deployment
+
+```bash
+cd btest-rs-web
+git pull origin main
+docker compose up -d --build
+curl http://localhost:3000/api/migrate
+curl http://localhost:3000/api/version
+```
+
+### Docker Troubleshooting
+
+**App can't connect to database**: The `db` container must be healthy before `app` starts. Check with `docker compose ps`. If db shows `unhealthy`, check `docker compose logs db`.
+
+**Port 3000 already in use**: Change the port mapping in `compose.yml`: `"8080:3000"` instead of `"3000:3000"`.
+
+**Caddy can't provision certificate**: Ensure your domain's DNS A record points to the server's public IP, and ports 80/443 are open.
+
+**Permission denied on volume**: Run `docker compose down -v` and `docker compose up -d` to recreate volumes with correct permissions.
 
 ---
 

@@ -27,7 +27,7 @@ The CLI and Android clients run bandwidth tests against a btest-rs server, then 
 | UI | React 19 + Tailwind CSS 4 | Component rendering and styling |
 | Charts | HTML Canvas (custom) | Speed chart rendering with no external charting library |
 | Database | Neon Postgres (serverless) | Persistent storage for users, runs, intervals |
-| DB Driver | `@neondatabase/serverless` | WebSocket-based Postgres driver for serverless environments |
+| DB Driver | `@neondatabase/serverless` + `pg` | Neon HTTP driver for Vercel, standard `pg` for Docker/self-hosted |
 | Auth | `jose` (JWT) + `bcryptjs` | Token signing/verification and password hashing |
 | Validation | Zod 4 | Runtime input validation with TypeScript type inference |
 | Email | Resend | Transactional email for password resets |
@@ -369,15 +369,14 @@ btest-rs-web/
 
 ## Key Design Decisions
 
-### Why the Neon Serverless Driver
+### Dual Database Driver (Neon + pg)
 
-The `@neondatabase/serverless` driver connects to Postgres over WebSocket instead of a traditional TCP connection. This is necessary because:
+The application supports two deployment modes with automatic driver detection:
 
-- Vercel serverless functions cannot maintain persistent TCP connections between invocations.
-- Traditional Postgres drivers (e.g. `pg`) require a TCP connection pool, which does not work well in serverless environments.
-- The Neon driver is designed specifically for this use case and handles connection setup in each invocation.
+- **Neon mode** (Vercel): When `DATABASE_URL` contains `neon.tech`, the app uses `@neondatabase/serverless` which connects over HTTP. This is required because Vercel serverless functions cannot maintain persistent TCP connections.
+- **Standard Postgres mode** (Docker/self-hosted): For any other `DATABASE_URL`, the app uses the `pg` package with a TCP connection pool. This provides lower latency and works with any standard PostgreSQL server.
 
-The trade-off is slightly higher latency per query compared to a pooled TCP connection, but this is acceptable for the request patterns in btest-rs-web.
+Detection is automatic based on the connection string — no configuration needed. Both drivers expose the same tagged template interface, so the rest of the codebase is driver-agnostic.
 
 ### Why JWT + API Keys (Dual Auth)
 

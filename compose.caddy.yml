@@ -1,0 +1,63 @@
+# btest-rs-web — Docker Compose with Caddy reverse proxy
+# Caddy handles HTTPS automatically via Let's Encrypt.
+#
+# Usage:
+#   cp .env.example .env
+#   # Edit .env — set DOMAIN, JWT_SECRET, POSTGRES_PASSWORD at minimum
+#   docker compose -f compose.caddy.yml up -d
+#   # Run migration:
+#   curl https://your-domain.com/api/migrate
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: btest-rs-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  app:
+    build: .
+    container_name: btest-rs-web
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - DATABASE_URL=postgres://btest:${POSTGRES_PASSWORD:-changeme}@db:5432/btest?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env}
+      - MIGRATE_SECRET=${MIGRATE_SECRET:-}
+      - NEXT_PUBLIC_APP_URL=https://${DOMAIN:?Set DOMAIN in .env}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    container_name: btest-rs-db
+    restart: unless-stopped
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=btest
+      - POSTGRES_USER=btest
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U btest -d btest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

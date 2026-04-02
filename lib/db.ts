@@ -1,11 +1,57 @@
-import { neon } from '@neondatabase/serverless';
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import pg from 'pg';
 
-export function getDb() {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type SqlTaggedTemplate = {
+  (strings: TemplateStringsArray, ...values: any[]): Promise<Record<string, any>[]>;
+  query: (text: string, values?: any[]) => Promise<Record<string, any>[]>;
+};
+
+let cachedSql: SqlTaggedTemplate | null = null;
+
+function isNeonUrl(url: string): boolean {
+  return url.includes('neon.tech') || url.includes('neon.aws');
+}
+
+function createPgSql(connectionString: string): SqlTaggedTemplate {
+  const pool = new pg.Pool({ connectionString });
+
+  const sql = async (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const text = strings.reduce(
+      (acc, str, i) => acc + str + (i < values.length ? `$${i + 1}` : ''),
+      ''
+    );
+    const result = await pool.query(text, values);
+    return result.rows;
+  };
+
+  sql.query = async (text: string, values?: unknown[]) => {
+    const result = await pool.query(text, values ?? []);
+    return result.rows;
+  };
+
+  return sql;
+}
+
+function createNeonSql(connectionString: string): SqlTaggedTemplate {
+  const sql = neon(connectionString) as NeonQueryFunction<false, false>;
+  // neon() already supports tagged templates and .query()
+  return sql as unknown as SqlTaggedTemplate;
+}
+
+export function getDb(): SqlTaggedTemplate {
+  if (cachedSql) return cachedSql;
+
   const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!databaseUrl) {
     throw new Error('DATABASE_URL or POSTGRES_URL environment variable is required');
   }
-  return neon(databaseUrl);
+
+  cachedSql = isNeonUrl(databaseUrl)
+    ? createNeonSql(databaseUrl)
+    : createPgSql(databaseUrl);
+
+  return cachedSql;
 }
 
 export async function migrate() {
